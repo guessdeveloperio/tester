@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiting Room</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: url('waitingroom.png') no-repeat center center fixed;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+            color: black;
+        }
+
+        #header {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: space-between;
+            gap: 30px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #header span {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 10px;
+        }
+
+        #players-container {
+            position: absolute;
+            top: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 800px;
+            background-color: rgba(0, 0, 50, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-gap: 15px;
+        }
+
+        .player-slot {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 50px;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+        }
+
+        #leave-button {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 80px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        #leave-button:hover {
+            transform: scale(1.1);
+        }
+
+        #footer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            color: black;
+        }
+
+        #footer span.waiting-word {
+            display: inline-block;
+        }
+
+        #footer span.dots {
+            display: inline-block;
+            width: 20px;
+            text-align: left;
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBE6y6qDrWEuUBVTY_ovWkaQv4aG9u407I",
+            authDomain: "phenoguess-test.firebaseapp.com",
+            projectId: "phenoguess-test",
+            storageBucket: "phenoguess-test.firebasestorage.app",
+            messagingSenderId: "510781444453",
+            appId: "1:510781444453:web:3f908d155fd769cc16d18c",
+            databaseURL: "https://phenoguess-test-default-rtdb.europe-west1.firebasedatabase.app/"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let waitingTextInterval;
+        const lobbyId = localStorage.getItem("lobbyId");
+        const username = localStorage.getItem("username");
+
+        if (!lobbyId || !username) {
+            alert("Invalid lobby or user session.");
+            window.location.href = "lobbies.html";
+        }
+
+        // Update waiting dots animation
+        function startWaitingDotsAnimation() {
+            const dots = ["", ".", "..", "..."];
+            let index = 0;
+            waitingTextInterval = setInterval(() => {
+                document.querySelector("#footer .dots").innerText = dots[index];
+                index = (index + 1) % dots.length;
+            }, 500);
+        }
+
+        // Refresh waiting room with real-time data
+        function refreshWaitingRoom() {
+            const lobbyRef = ref(db, `lobbies/${lobbyId}`);
+
+            onValue(lobbyRef, (snapshot) => {
+                const data = snapshot.val();
+                if (!data) {
+                    alert("The lobby no longer exists.");
+                    window.location.href = "lobbies.html";
+                    return;
+                }
+
+                // Update header info
+                document.getElementById("rounds-display").innerText = `Rounds: ${data.rounds || ""}`;
+                document.getElementById("players-display").innerText = `Players: ${data.players.length || ""}/${data.maxPlayers || ""}`;
+
+                // Update player slots
+                const playersContainer = document.getElementById("players-container");
+                playersContainer.innerHTML = ""; // Clear existing slots
+
+                for (let i = 0; i < data.maxPlayers; i++) {
+                    const player = data.players[i];
+                    const slot = document.createElement("div");
+                    slot.classList.add("player-slot");
+                    slot.style.backgroundColor = player ? "lightblue" : "rgba(255, 255, 255, 0.2)";
+                    slot.innerText = player || "Waiting...";
+                    playersContainer.appendChild(slot);
+                }
+            });
+        }
+
+        // Leave lobby function
+        function leaveLobby() {
+            const confirmLeave = confirm("Are you sure you want to leave the lobby?");
+            if (confirmLeave) {
+                const playerRef = ref(db, `lobbies/${lobbyId}/players`);
+                onValue(playerRef, (snapshot) => {
+                    const players = snapshot.val() || [];
+                    const updatedPlayers = players.filter((player) => player !== username);
+                    remove(ref(db, `lobbies/${lobbyId}/players`)).then(() => {
+                        localStorage.removeItem("lobbyId");
+                        localStorage.removeItem("username");
+                        window.location.href = "lobbies.html";
+                    });
+                });
+            }
+        }
+
+        // Refresh waiting room and start animations on load
+        window.onload = () => {
+            refreshWaitingRoom();
+            startWaitingDotsAnimation();
+        };
+    </script>
+</head>
+<body>
+    <div id="header">
+        <span id="rounds-display">Rounds: </span>
+        <span id="players-display">Players: </span>
+    </div>
+
+    <div id="players-container">
+        <!-- Dynamic player slots will be inserted here -->
+    </div>
+
+    <img id="leave-button" src="leave.png" alt="Leave Button" onclick="leaveLobby()">
+
+    <div id="footer">
+        <span class="waiting-word">Waiting</span><span class="dots"></span>
+    </div>
+</body>
+</html>
